@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智能热榜解析系统</title>
+    <title>智能热榜解析系统 - 云端同步版</title>
     <style>
         :root {
             --primary: #1a6dff;
             --success: #28a745;
             --warning: #ffc107;
             --danger: #dc3545;
+            --info: #17a2b8;
         }
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -132,6 +133,7 @@
         .btn-primary { background: var(--primary); color: white; }
         .btn-success { background: var(--success); color: white; }
         .btn-warning { background: var(--warning); color: #333; }
+        .btn-info { background: var(--info); color: white; }
         
         .btn:hover {
             transform: translateY(-2px);
@@ -607,18 +609,138 @@
             opacity: 0.6;
         }
         
-        /* 数据库状态提示 */
-        .db-status {
+        /* 同步状态样式 */
+        .sync-status {
             padding: 10px 15px;
             border-radius: 8px;
-            margin: 10px 0;
+            margin: 10px auto;
             font-size: 14px;
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
+            max-width: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            display: none;
         }
         
-        .db-status i {
-            margin-right: 8px;
+        .sync-loading {
+            background: #e7f3ff;
+            color: var(--primary);
+            border: 1px solid #b3d7ff;
+        }
+        
+        .sync-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .sync-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .sync-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        /* 配置指南弹窗 */
+        .config-guide-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 3000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .config-guide {
+            background: white;
+            border-radius: 15px;
+            width: 100%;
+            max-width: 700px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+        
+        .guide-header {
+            padding: 25px;
+            border-bottom: 1px solid #eee;
+            background: linear-gradient(90deg, var(--primary), #0d5bdd);
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+        
+        .guide-body {
+            padding: 30px;
+        }
+        
+        .guide-step {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: var(--primary);
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .config-input-group {
+            margin: 20px 0;
+        }
+        
+        .config-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+        
+        .config-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .guide-footer {
+            padding: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+        }
+        
+        /* 更新提示 */
+        .update-tip {
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            border-radius: 8px;
+            padding: 8px 15px;
+            font-size: 13px;
+            color: var(--primary);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 10px;
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -648,17 +770,104 @@
         </div>
     </div>
 
+    <!-- JSONBin配置指南 -->
+    <div class="config-guide-overlay" id="configGuideOverlay">
+        <div class="config-guide">
+            <div class="guide-header">
+                <h2><i class="fas fa-cloud"></i> 云端同步配置指南</h2>
+                <p>只需3步，开启云端同步功能</p>
+            </div>
+            <div class="guide-body">
+                <div class="guide-step">
+                    <h3><span class="step-number">1</span> 注册 JSONBin.io 账号</h3>
+                    <p>访问 <a href="https://jsonbin.io" target="_blank" style="color: var(--primary); font-weight: bold;">https://jsonbin.io</a> 注册免费账号</p>
+                    <p>点击右上角 "Sign Up" 按钮，使用邮箱注册即可</p>
+                    <button class="btn btn-primary" onclick="openJsonbin()">
+                        <i class="fas fa-external-link-alt"></i> 前往 JSONBin.io
+                    </button>
+                </div>
+                
+                <div class="guide-step">
+                    <h3><span class="step-number">2</span> 创建数据存储桶</h3>
+                    <p>登录后点击 "Create New Bin"</p>
+                    <p>在编辑框中输入：<code style="background: #f0f2f5; padding: 5px 10px; border-radius: 4px;">{"posts": []}</code></p>
+                    <p>点击 "Save" 保存</p>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                        <p><strong>重要：</strong>保存后，您会看到类似这样的信息：</p>
+                        <pre style="background: #333; color: #fff; padding: 10px; border-radius: 5px; overflow-x: auto;">
+Bin ID: 65b3b1b7266cfc3fde8c9b3a
+Master Key: $2a$10$Xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</pre>
+                    </div>
+                </div>
+                
+                <div class="guide-step">
+                    <h3><span class="step-number">3</span> 配置系统</h3>
+                    <p>将上一步获取的信息填入下方：</p>
+                    
+                    <div class="config-input-group">
+                        <label><strong>Bin ID：</strong></label>
+                        <input type="text" class="config-input" id="configBinId" placeholder="例如：65b3b1b7266cfc3fde8c9b3a">
+                    </div>
+                    
+                    <div class="config-input-group">
+                        <label><strong>Master Key（可选）：</strong></label>
+                        <input type="password" class="config-input" id="configMasterKey" placeholder="如果您想保护数据，请填写">
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">不填写 Master Key 时，任何人都可以修改您的数据</p>
+                    </div>
+                    
+                    <div class="config-input-group">
+                        <label><strong>数据同步密码：</strong></label>
+                        <input type="password" class="config-input" id="configSyncPassword" placeholder="设置一个访问密码（可选）">
+                        <p style="font-size: 12px; color: #666; margin-top: 5px;">其他用户需要输入此密码才能从云端获取数据</p>
+                    </div>
+                </div>
+            </div>
+            <div class="guide-footer">
+                <button class="btn btn-success" onclick="saveCloudConfig()" style="padding: 12px 30px;">
+                    <i class="fas fa-check"></i> 保存配置
+                </button>
+                <button class="btn" onclick="closeConfigGuide()" style="margin-left: 10px; background: #6c757d; color: white;">
+                    跳过配置
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 密码输入弹窗 -->
+    <div class="login-overlay" id="passwordOverlay">
+        <div class="login-box">
+            <h2 class="login-title"><i class="fas fa-key"></i> 输入同步密码</h2>
+            <div class="form-group">
+                <label class="form-label">请输入数据同步密码</label>
+                <input type="password" class="form-control" id="syncPassword" placeholder="请输入密码">
+                <p style="font-size: 12px; color: #666; margin-top: 5px;">管理员设置的云端数据访问密码</p>
+            </div>
+            <button class="btn btn-primary" style="width:100%;" onclick="checkSyncPassword()">
+                <i class="fas fa-unlock"></i> 确认
+            </button>
+            <button class="btn" onclick="closePasswordOverlay()" style="width:100%; margin-top:10px; background: #6c757d; color: white;">
+                取消
+            </button>
+        </div>
+    </div>
+
     <!-- 管理员编辑界面 -->
     <div class="container" id="adminContainer" style="display:none;">
         <div class="header">
             <h1>
                 <span class="header-icon"><i class="fas fa-robot"></i></span>
                 AI热榜数据解析系统
+                <span style="font-size: 14px; background: #4cd964; color: white; padding: 4px 10px; border-radius: 20px; margin-left: 10px;">
+                    <i class="fas fa-cloud"></i> 云端同步版
+                </span>
             </h1>
             <p>将AI回复粘贴到左侧，自动解析生成热榜</p>
             <div style="margin-top:15px;">
                 <button class="btn btn-warning" onclick="showPublicView()">
-                    <i class="fas fa-eye"></i> 查看公共热榜
+                    <i class="fas fa-eye"></i> 查看热榜
+                </button>
+                <button class="btn btn-info" onclick="showConfigGuide()" style="margin-left:10px;">
+                    <i class="fas fa-cog"></i> 云端配置
                 </button>
                 <button class="btn" onclick="logout()" style="background:#666; color:white; margin-left:10px;">
                     <i class="fas fa-sign-out-alt"></i> 退出
@@ -711,7 +920,7 @@
                         <i class="fas fa-trash"></i> 清空
                     </button>
                     <button class="btn btn-success" onclick="saveToPublic()" id="saveBtn" disabled>
-                        <i class="fas fa-cloud-upload-alt"></i> 发布到热榜
+                        <i class="fas fa-cloud-upload-alt"></i> 发布到云端
                     </button>
                 </div>
                 
@@ -736,6 +945,12 @@
                             <option value="15">前15名</option>
                             <option value="20">前20名</option>
                         </select>
+                    </div>
+                    
+                    <!-- 云端状态显示 -->
+                    <div id="cloudStatus" style="margin-top: 15px; padding: 10px; background: #e7f3ff; border-radius: 6px; font-size: 12px;">
+                        <div><i class="fas fa-cloud"></i> <strong>云端状态：</strong><span id="cloudStatusText">未配置</span></div>
+                        <div style="margin-top: 5px;"><i class="fas fa-sync-alt"></i> <strong>最后同步：</strong><span id="lastSyncTime">从未同步</span></div>
                     </div>
                 </div>
             </div>
@@ -765,7 +980,13 @@
             <div class="public-header">
                 <h2 id="publicTitle">今日频道热帖排行榜</h2>
                 <div class="update-time" id="updateTime">最后更新：从未更新</div>
+                <div id="cloudInfo" style="font-size: 12px; color: #666; margin-top: 5px;">
+                    <i class="fas fa-cloud"></i> <span id="cloudSourceInfo">使用本地数据</span>
+                </div>
             </div>
+            
+            <!-- 同步状态显示 -->
+            <div id="syncStatus"></div>
             
             <div id="publicHotlist">
                 <!-- 热榜内容动态生成 -->
@@ -775,14 +996,17 @@
                 <button class="btn btn-primary" onclick="showLoginOverlay()">
                     <i class="fas fa-edit"></i> 管理员登录
                 </button>
-                <button class="btn btn-warning" onclick="clearAllData()" style="margin-left:10px;">
-                    <i class="fas fa-trash"></i> 清空所有数据
+                <button class="btn btn-success" onclick="refreshData()" style="margin-left:10px;">
+                    <i class="fas fa-sync-alt"></i> 更新数据
                 </button>
-                <button class="btn btn-success" onclick="showAdminView()" style="margin-left:10px;">
-                    <i class="fas fa-cog"></i> 管理界面
+                <button class="btn btn-info" onclick="showConfigGuide()" style="margin-left:10px;">
+                    <i class="fas fa-cog"></i> 云端配置
                 </button>
                 <p style="color:#666; margin-top:15px; font-size:13px;">
-                    数据保存在本地浏览器中 • 热度根据浏览、点赞、评论综合计算
+                    支持云端同步 • 数据保存在云端服务器 • 实时更新
+                </p>
+                <p id="autoUpdateInfo" style="font-size:12px; color:#999; margin-top:5px; display:none;">
+                    <i class="fas fa-clock"></i> 自动更新已开启（每5分钟检查一次）
                 </p>
             </div>
         </div>
@@ -823,28 +1047,522 @@
         // 【系统配置】
         // ============================================
         
-        // 管理员账号（您可自定义）
+        // 管理员账号
         const ADMIN_ACCOUNT = "admin";
         const ADMIN_PASSWORD = "123456"; // 建议修改
         
         // 存储键名
         const STORAGE_KEYS = {
-            HOTLIST_DATA: 'ai_hotlist_data',
-            PUBLIC_DATA: 'ai_public_data',
-            LOGIN_TOKEN: 'ai_login_token',
-            // 新增：独立的数据存储键，避免冲突
-            PUBLIC_HOTLIST_DATA: 'ai_public_hotlist_data_v2',
-            ADMIN_HOTLIST_DATA: 'ai_admin_hotlist_data_v2'
+            PUBLIC_HOTLIST_DATA: 'ai_public_hotlist_data_v3',
+            ADMIN_HOTLIST_DATA: 'ai_admin_hotlist_data_v3',
+            LOGIN_TOKEN: 'ai_login_token_v3',
+            CLOUD_CONFIG: 'ai_cloud_config_v3'
         };
         
-        // 当前模式：admin（编辑） 或 public（查看）
+        // JSONBin.io 配置
+        const JSONBIN_CONFIG = {
+            BASE_URL: 'https://api.jsonbin.io/v3/b',
+            EXAMPLE_BIN: '65b3b1b7266cfc3fde8c9b3a' // 公开示例 bin（只读）
+        };
+        
+        // 当前模式
         let currentMode = 'public';
         
         // 解析后的数据缓存
         let parsedPosts = [];
         
+        // 云端配置
+        let cloudConfig = {
+            binId: '',
+            masterKey: '',
+            syncPassword: '',
+            configured: false
+        };
+        
+        // 自动更新定时器
+        let autoUpdateTimer = null;
+        
         // ============================================
-        // 【登录验证 - 修复版】
+        // 【云端配置管理】
+        // ============================================
+        
+        function loadCloudConfig() {
+            try {
+                const configStr = localStorage.getItem(STORAGE_KEYS.CLOUD_CONFIG);
+                if (configStr) {
+                    cloudConfig = JSON.parse(configStr);
+                    updateCloudStatusDisplay();
+                    
+                    // 如果已配置云端，启动自动更新
+                    if (cloudConfig.configured) {
+                        startAutoUpdate();
+                    }
+                    
+                    return cloudConfig;
+                }
+            } catch (e) {
+                console.error('加载云端配置失败:', e);
+            }
+            return null;
+        }
+        
+        function saveCloudConfig() {
+            const binId = document.getElementById('configBinId').value.trim();
+            const masterKey = document.getElementById('configMasterKey').value.trim();
+            const syncPassword = document.getElementById('configSyncPassword').value.trim();
+            
+            if (!binId) {
+                showMessage('请输入 Bin ID', 'error');
+                return;
+            }
+            
+            cloudConfig = {
+                binId: binId,
+                masterKey: masterKey,
+                syncPassword: syncPassword,
+                configured: true,
+                configTime: new Date().toISOString()
+            };
+            
+            try {
+                localStorage.setItem(STORAGE_KEYS.CLOUD_CONFIG, JSON.stringify(cloudConfig));
+                closeConfigGuide();
+                updateCloudStatusDisplay();
+                showMessage('云端配置保存成功！', 'success');
+                
+                // 启动自动更新
+                startAutoUpdate();
+                
+                // 如果已经登录，刷新云端状态
+                if (currentMode === 'admin') {
+                    checkCloudConnection();
+                }
+            } catch (e) {
+                showMessage('保存配置失败: ' + e.message, 'error');
+            }
+        }
+        
+        function updateCloudStatusDisplay() {
+            const statusEl = document.getElementById('cloudStatusText');
+            const syncTimeEl = document.getElementById('lastSyncTime');
+            const cloudInfoEl = document.getElementById('cloudSourceInfo');
+            
+            if (cloudConfig.configured) {
+                if (statusEl) statusEl.textContent = '已配置';
+                if (cloudInfoEl) cloudInfoEl.textContent = '已启用云端同步';
+                
+                // 获取最后同步时间
+                const publicData = loadPublicData();
+                if (publicData && publicData.meta && publicData.meta.lastSyncTime) {
+                    const timeStr = new Date(publicData.meta.lastSyncTime).toLocaleString();
+                    if (syncTimeEl) syncTimeEl.textContent = timeStr;
+                }
+            } else {
+                if (statusEl) statusEl.textContent = '未配置';
+                if (syncTimeEl) syncTimeEl.textContent = '从未同步';
+                if (cloudInfoEl) cloudInfoEl.textContent = '使用本地数据';
+            }
+        }
+        
+        function showConfigGuide() {
+            document.getElementById('configGuideOverlay').style.display = 'flex';
+        }
+        
+        function closeConfigGuide() {
+            document.getElementById('configGuideOverlay').style.display = 'none';
+        }
+        
+        function openJsonbin() {
+            window.open('https://jsonbin.io', '_blank');
+        }
+        
+        function checkCloudConnection() {
+            if (!cloudConfig.configured || !cloudConfig.binId) {
+                return Promise.resolve(false);
+            }
+            
+            showSyncStatus('正在测试云端连接...', 'loading');
+            
+            return fetch(`${JSONBIN_CONFIG.BASE_URL}/${cloudConfig.binId}`, {
+                headers: cloudConfig.masterKey ? {
+                    'X-Master-Key': cloudConfig.masterKey
+                } : {}
+            })
+            .then(response => {
+                if (response.ok) {
+                    showSyncStatus('云端连接正常', 'success');
+                    return true;
+                } else {
+                    showSyncStatus('云端连接失败', 'error');
+                    return false;
+                }
+            })
+            .catch(error => {
+                showSyncStatus('网络连接错误: ' + error.message, 'error');
+                return false;
+            });
+        }
+        
+        // ============================================
+        // 【密码保护功能】
+        // ============================================
+        
+        function showPasswordOverlay() {
+            document.getElementById('passwordOverlay').style.display = 'flex';
+        }
+        
+        function closePasswordOverlay() {
+            document.getElementById('passwordOverlay').style.display = 'none';
+            document.getElementById('syncPassword').value = '';
+        }
+        
+        function checkSyncPassword() {
+            const inputPassword = document.getElementById('syncPassword').value;
+            const storedPassword = cloudConfig.syncPassword;
+            
+            if (!storedPassword || inputPassword === storedPassword) {
+                closePasswordOverlay();
+                refreshData(true);
+            } else {
+                showMessage('密码错误', 'error');
+            }
+        }
+        
+        // ============================================
+        // 【数据更新功能 - 核心功能】
+        // ============================================
+        
+        // 刷新数据（主要更新函数）
+        function refreshData(force = false) {
+            // 检查是否需要密码
+            if (cloudConfig.configured && cloudConfig.syncPassword && !force) {
+                showPasswordOverlay();
+                return;
+            }
+            
+            // 确定使用哪个 bin
+            let binId = cloudConfig.configured ? cloudConfig.binId : JSONBIN_CONFIG.EXAMPLE_BIN;
+            
+            showSyncStatus('正在更新数据...', 'loading');
+            
+            fetchDataFromCloud(binId)
+                .then(result => {
+                    if (result.success) {
+                        showSyncStatus(`数据更新成功！${result.count} 条数据`, 'success');
+                        showMessage('数据已更新到最新版本', 'success');
+                    }
+                })
+                .catch(error => {
+                    showSyncStatus('更新失败: ' + error.message, 'error');
+                });
+        }
+        
+        // 从云端获取数据的核心函数
+        async function fetchDataFromCloud(binId) {
+            try {
+                const url = `${JSONBIN_CONFIG.BASE_URL}/${binId}/latest`;
+                const headers = {};
+                
+                if (cloudConfig.configured && cloudConfig.masterKey) {
+                    headers['X-Master-Key'] = cloudConfig.masterKey;
+                }
+                
+                const response = await fetch(url, { headers });
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Bin ID 不存在或已被删除');
+                    } else if (response.status === 403) {
+                        throw new Error('访问被拒绝，请检查 Master Key');
+                    } else {
+                        throw new Error(`HTTP错误: ${response.status}`);
+                    }
+                }
+                
+                const result = await response.json();
+                
+                if (result.record) {
+                    // 验证数据格式
+                    if (!result.record.posts || !Array.isArray(result.record.posts)) {
+                        throw new Error('云端数据格式错误');
+                    }
+                    
+                    // 检查是否有新数据
+                    const localData = loadPublicData();
+                    const isNewData = !localData || 
+                                     !localData.meta || 
+                                     !localData.meta.updateTime || 
+                                     !result.record.meta || 
+                                     !result.record.meta.updateTime ||
+                                     new Date(result.record.meta.updateTime) > new Date(localData.meta.updateTime);
+                    
+                    // 添加同步来源标记
+                    result.record.meta = result.record.meta || {};
+                    result.record.meta.cloudSource = true;
+                    result.record.meta.lastSyncTime = new Date().toISOString();
+                    result.record.meta.syncFrom = cloudConfig.configured ? 'user_bin' : 'example_bin';
+                    
+                    // 保存到本地
+                    if (savePublicData(result.record)) {
+                        // 更新显示
+                        renderPublicHotlist();
+                        
+                        // 更新云端状态显示
+                        updateCloudStatusDisplay();
+                        
+                        return {
+                            success: true,
+                            count: result.record.posts.length,
+                            isNewData: isNewData,
+                            updateTime: result.record.meta.updateTime
+                        };
+                    }
+                } else {
+                    throw new Error('云端返回数据格式错误');
+                }
+            } catch (error) {
+                console.error('获取云端数据失败:', error);
+                
+                // 显示配置指南
+                if (!cloudConfig.configured) {
+                    setTimeout(() => {
+                        if (confirm('云端数据获取失败，是否现在配置您自己的云端存储？')) {
+                            showConfigGuide();
+                        }
+                    }, 1500);
+                }
+                
+                throw error;
+            }
+        }
+        
+        // 自动更新功能
+        function startAutoUpdate() {
+            // 清除现有的定时器
+            if (autoUpdateTimer) {
+                clearInterval(autoUpdateTimer);
+            }
+            
+            // 每5分钟检查一次更新（300000毫秒）
+            autoUpdateTimer = setInterval(() => {
+                if (cloudConfig.configured && currentMode === 'public') {
+                    checkForUpdates();
+                }
+            }, 300000); // 5分钟
+            
+            // 显示自动更新提示
+            const autoUpdateInfo = document.getElementById('autoUpdateInfo');
+            if (autoUpdateInfo) {
+                autoUpdateInfo.style.display = 'block';
+            }
+            
+            console.log('自动更新已启动，每5分钟检查一次');
+        }
+        
+        // 检查是否有更新
+        async function checkForUpdates() {
+            if (!cloudConfig.configured || !cloudConfig.binId) {
+                return;
+            }
+            
+            try {
+                const url = `${JSONBIN_CONFIG.BASE_URL}/${cloudConfig.binId}/latest`;
+                const headers = {};
+                
+                if (cloudConfig.masterKey) {
+                    headers['X-Master-Key'] = cloudConfig.masterKey;
+                }
+                
+                const response = await fetch(url, { headers });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    if (result.record && result.record.meta && result.record.meta.updateTime) {
+                        const localData = loadPublicData();
+                        
+                        // 检查云端数据是否比本地数据更新
+                        if (!localData || !localData.meta || !localData.meta.updateTime || 
+                            new Date(result.record.meta.updateTime) > new Date(localData.meta.updateTime)) {
+                            
+                            // 显示更新提示
+                            showUpdateNotification();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.log('检查更新失败:', error);
+            }
+        }
+        
+        // 显示更新通知
+        function showUpdateNotification() {
+            // 创建更新提示
+            const notification = document.createElement('div');
+            notification.innerHTML = `
+                <div style="position:fixed; top:20px; right:20px; padding:15px 20px; 
+                     background:var(--primary); color:white; border-radius:8px; 
+                     z-index:9999; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15);
+                     display:flex; align-items:center; gap:10px;">
+                    <i class="fas fa-sync-alt"></i>
+                    <div>
+                        <div style="font-weight:bold;">有新的数据更新</div>
+                        <div style="font-size:12px; opacity:0.8;">点击"更新数据"按钮获取最新内容</div>
+                    </div>
+                    <button onclick="this.parentElement.remove()" style="background:none; border:none; color:white; cursor:pointer; margin-left:10px;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 5秒后自动消失
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+        
+        // 显示同步状态
+        function showSyncStatus(message, type) {
+            const statusEl = document.getElementById('syncStatus');
+            if (!statusEl) return;
+            
+            let icon = 'info-circle';
+            if (type === 'loading') icon = 'spinner fa-spin';
+            else if (type === 'success') icon = 'check-circle';
+            else if (type === 'error') icon = 'times-circle';
+            else if (type === 'warning') icon = 'exclamation-circle';
+            
+            statusEl.innerHTML = `
+                <div class="sync-status sync-${type}">
+                    <i class="fas fa-${icon}"></i>
+                    ${message}
+                </div>
+            `;
+            statusEl.style.display = 'block';
+            
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        // ============================================
+        // 【云端上传功能】
+        // ============================================
+        
+        async function saveToCloud() {
+            const publicData = loadPublicData();
+            
+            if (!publicData || !publicData.posts || publicData.posts.length === 0) {
+                showMessage('没有数据可以上传', 'error');
+                return;
+            }
+            
+            if (!cloudConfig.configured) {
+                if (confirm('您还没有配置云端存储，是否现在配置？')) {
+                    showConfigGuide();
+                }
+                return;
+            }
+            
+            showSyncStatus('正在上传数据到云端...', 'loading');
+            
+            try {
+                const url = `${JSONBIN_CONFIG.BASE_URL}/${cloudConfig.binId}`;
+                
+                // 更新元数据
+                publicData.meta = publicData.meta || {};
+                publicData.meta.lastUpdate = new Date().toISOString();
+                publicData.meta.updatedBy = 'admin';
+                
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (cloudConfig.masterKey) {
+                    headers['X-Master-Key'] = cloudConfig.masterKey;
+                } else {
+                    showSyncStatus('警告：未设置 Master Key，数据可能被公开修改', 'warning');
+                }
+                
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify(publicData)
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        throw new Error('Bin ID 不存在或已被删除');
+                    } else if (response.status === 403) {
+                        throw new Error('访问被拒绝，请检查 Master Key');
+                    } else {
+                        throw new Error(`HTTP错误: ${response.status}`);
+                    }
+                }
+                
+                const result = await response.json();
+                
+                // 更新本地数据的同步时间
+                publicData.meta.lastSyncTime = new Date().toISOString();
+                savePublicData(publicData);
+                
+                showSyncStatus('数据已成功上传到云端！', 'success');
+                showMessage('云端同步完成，其他人现在可以看到最新数据', 'success');
+                
+                updateCloudStatusDisplay();
+                
+            } catch (error) {
+                console.error('上传数据失败:', error);
+                showSyncStatus('上传失败: ' + error.message, 'error');
+                showMessage('上传数据失败: ' + error.message, 'error');
+            }
+        }
+        
+        // ============================================
+        // 【数据持久化】
+        // ============================================
+        
+        function savePublicData(data) {
+            try {
+                localStorage.setItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA, JSON.stringify(data));
+                return true;
+            } catch (e) {
+                console.error('保存数据失败:', e);
+                showMessage('保存数据失败: ' + e.message, 'error');
+                return false;
+            }
+        }
+        
+        function loadPublicData() {
+            try {
+                const dataStr = localStorage.getItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA);
+                if (dataStr) {
+                    return JSON.parse(dataStr);
+                }
+            } catch (e) {
+                console.error('加载数据失败:', e);
+            }
+            return null;
+        }
+        
+        function saveAdminData(data) {
+            try {
+                localStorage.setItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA, JSON.stringify(data));
+                return true;
+            } catch (e) {
+                console.error('保存管理员数据失败:', e);
+                return false;
+            }
+        }
+        
+        // ============================================
+        // 【登录验证】
         // ============================================
         
         function showLoginOverlay() {
@@ -853,6 +1571,8 @@
         
         function closeLoginOverlay() {
             document.getElementById('loginOverlay').style.display = 'none';
+            document.getElementById('adminAccount').value = '';
+            document.getElementById('adminPassword').value = '';
         }
         
         function checkLogin() {
@@ -860,7 +1580,6 @@
             const password = document.getElementById('adminPassword').value;
             
             if (account === ADMIN_ACCOUNT && password === ADMIN_PASSWORD) {
-                // 生成登录令牌（有效期24小时）
                 const token = {
                     account: account,
                     loginTime: new Date().toISOString(),
@@ -883,21 +1602,15 @@
             if (tokenStr) {
                 try {
                     const token = JSON.parse(tokenStr);
-                    
-                    // 检查令牌是否过期
                     if (token.expires > Date.now()) {
-                        // 自动登录成功
                         return true;
                     } else {
-                        // 令牌过期，清除
                         localStorage.removeItem(STORAGE_KEYS.LOGIN_TOKEN);
                     }
                 } catch (e) {
-                    // 令牌无效
                     localStorage.removeItem(STORAGE_KEYS.LOGIN_TOKEN);
                 }
             }
-            
             return false;
         }
         
@@ -905,71 +1618,6 @@
             localStorage.removeItem(STORAGE_KEYS.LOGIN_TOKEN);
             showPublicView();
             showMessage('已退出登录', 'success');
-        }
-        
-        // ============================================
-        // 【数据持久化 - 修复版】
-        // ============================================
-        
-        // 保存公共热榜数据（所有人可见）
-        function savePublicData(data) {
-            try {
-                localStorage.setItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA, JSON.stringify(data));
-                console.log('数据已保存到本地存储');
-                return true;
-            } catch (e) {
-                console.error('保存数据失败:', e);
-                showMessage('保存数据失败，请检查浏览器设置', 'error');
-                return false;
-            }
-        }
-        
-        // 加载公共热榜数据
-        function loadPublicData() {
-            try {
-                const dataStr = localStorage.getItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA);
-                if (dataStr) {
-                    return JSON.parse(dataStr);
-                }
-            } catch (e) {
-                console.error('加载数据失败:', e);
-            }
-            return null;
-        }
-        
-        // 保存管理员数据
-        function saveAdminData(data) {
-            try {
-                localStorage.setItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA, JSON.stringify(data));
-                return true;
-            } catch (e) {
-                console.error('保存管理员数据失败:', e);
-                return false;
-            }
-        }
-        
-        // 加载管理员数据
-        function loadAdminData() {
-            try {
-                const dataStr = localStorage.getItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA);
-                if (dataStr) {
-                    return JSON.parse(dataStr);
-                }
-            } catch (e) {
-                console.error('加载管理员数据失败:', e);
-            }
-            return null;
-        }
-        
-        // 清空所有数据
-        function clearAllData() {
-            if (confirm('确定要清空所有热榜数据吗？此操作不可撤销！')) {
-                localStorage.removeItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA);
-                localStorage.removeItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA);
-                localStorage.removeItem(STORAGE_KEYS.LOGIN_TOKEN);
-                showPublicView();
-                showMessage('所有数据已清空', 'success');
-            }
         }
         
         // ============================================
@@ -984,25 +1632,13 @@
                 return;
             }
             
-            // 清空之前的数据
             parsedPosts = [];
             
-            // 尝试不同的解析策略
             let success = false;
-            
-            // 策略1：解析JSON格式
             if (!success) success = tryParseJSON(input);
-            
-            // 策略2：解析列表格式（带数字序号和链接）
             if (!success) success = tryParseNumberedList(input);
-            
-            // 策略3：解析表格格式
             if (!success) success = tryParseTableFormat(input);
-            
-            // 策略4：解析自然语言格式
             if (!success) success = tryParseNaturalLanguage(input);
-            
-            // 策略5：通用解析
             if (!success) success = tryParseGeneric(input);
             
             if (success) {
@@ -1017,12 +1653,8 @@
         function tryParseJSON(input) {
             try {
                 let cleanedInput = input.trim();
-                
                 const jsonMatch = cleanedInput.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                    cleanedInput = jsonMatch[0];
-                }
-                
+                if (jsonMatch) cleanedInput = jsonMatch[0];
                 cleanedInput = cleanedInput.replace(/'/g, '"');
                 
                 const data = JSON.parse(cleanedInput);
@@ -1053,7 +1685,6 @@
             lines.forEach(line => {
                 line = line.trim();
                 
-                // 多种格式匹配
                 const patterns = [
                     /^(\d+)[\.、]\s*(.+?)\s+\[(.+?)\]\s+(\d+)\s*浏览\s+(\d+)\s*点赞\s+(\d+)\s*评论\s+(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/,
                     /^(\d+)[\.、]\s*(.+?)\s+[-–]\s+(.+?)\s+[-–]\s+(\d+)\s*浏览\s+[-–]\s+(\d+)\s*点赞\s+[-–]\s+(\d+)\s*评论\s+[-–]\s+(.+?)(?:\s+[-–]\s+链接[:：]\s*(https?:\/\/\S+))?$/,
@@ -1079,11 +1710,9 @@
                         link: ''
                     };
                     
-                    // 提取作者
                     const authorMatch = line.match(/\[(.+?)\]/) || line.match(/\((.+?)\)/);
                     if (authorMatch) post.author = authorMatch[1].trim();
                     
-                    // 提取数据
                     const viewMatch = line.match(/(\d+)\s*浏览/);
                     const likeMatch = line.match(/(\d+)\s*点赞/);
                     const commentMatch = line.match(/(\d+)\s*评论/);
@@ -1094,7 +1723,6 @@
                     if (commentMatch) post.comments = parseInt(commentMatch[1]);
                     if (timeMatch) post.time = timeMatch[0];
                     
-                    // 提取链接
                     let link = '';
                     if (match[8]) link = match[8];
                     else if (match[7]) link = match[7];
@@ -1106,7 +1734,6 @@
                     }
                     
                     post.link = extractAndValidateLink(link);
-                    
                     posts.push(post);
                 }
             });
@@ -1115,13 +1742,11 @@
                 parsedPosts = posts;
                 return true;
             }
-            
             return false;
         }
         
         function tryParseTableFormat(input) {
             const lines = input.split('\n').filter(line => line.trim() && (line.includes('|') || line.includes('\t')));
-            
             if (lines.length < 1) return false;
             
             const posts = [];
@@ -1161,7 +1786,6 @@
                 parsedPosts = posts;
                 return true;
             }
-            
             return false;
         }
         
@@ -1213,7 +1837,6 @@
                 parsedPosts = posts;
                 return true;
             }
-            
             return false;
         }
         
@@ -1264,7 +1887,6 @@
                 parsedPosts = posts.slice(0, 20);
                 return true;
             }
-            
             return false;
         }
         
@@ -1291,6 +1913,71 @@
                 .replace(/^[\.、\d\s]+/, '')
                 .replace(/[\*\-_\s]+$/, '')
                 .trim();
+        }
+        
+        // ============================================
+        // 【数据保存和发布】
+        // ============================================
+        
+        function saveToPublic() {
+            if (parsedPosts.length === 0) {
+                showSaveMessage('没有可发布的数据', 'error');
+                return;
+            }
+            
+            const title = document.getElementById('hotlistTitle').value || '今日频道热帖排行榜';
+            const note = document.getElementById('updateNote').value || '数据来源于频道AI分析';
+            const limit = parseInt(document.getElementById('displayCount').value) || 10;
+            
+            parsedPosts.forEach(post => {
+                post.hotScore = calculateHotScore(post);
+            });
+            
+            parsedPosts.sort((a, b) => b.hotScore - a.hotScore);
+            
+            const displayPosts = parsedPosts.slice(0, limit).map((post, index) => ({
+                ...post,
+                rank: index + 1
+            }));
+            
+            const publicData = {
+                posts: displayPosts,
+                meta: {
+                    title: title,
+                    note: note,
+                    totalPosts: parsedPosts.length,
+                    displayCount: displayPosts.length,
+                    updateTime: new Date().toISOString(),
+                    source: '频道AI分析',
+                    updatedBy: 'admin'
+                }
+            };
+            
+            if (savePublicData(publicData)) {
+                saveAdminData({
+                    rawData: document.getElementById('aiInput').value,
+                    parsedData: parsedPosts,
+                    savedTime: new Date().toISOString()
+                });
+                
+                showSaveMessage(`成功保存 ${displayPosts.length} 条热帖数据`, 'success');
+                
+                if (cloudConfig.configured) {
+                    if (confirm('数据已保存到本地，是否同时上传到云端？')) {
+                        saveToCloud();
+                    }
+                } else {
+                    if (confirm('数据已保存到本地，是否现在配置云端同步？')) {
+                        showConfigGuide();
+                    }
+                }
+                
+                if (currentMode === 'public') {
+                    renderPublicHotlist();
+                }
+                
+                document.getElementById('saveBtn').disabled = true;
+            }
         }
         
         // ============================================
@@ -1414,7 +2101,7 @@
                     <div style="text-align:center; padding:80px 20px; color:#666;">
                         <i class="fas fa-inbox fa-3x"></i>
                         <h3 style="margin:20px 0 10px;">暂无热榜数据</h3>
-                        <p>点击"管理员登录"按钮创建第一个热榜</p>
+                        <p>点击"更新数据"按钮或"管理员登录"创建热榜</p>
                     </div>
                 `;
                 return;
@@ -1471,70 +2158,6 @@
         }
         
         // ============================================
-        // 【数据保存和发布】
-        // ============================================
-        
-        function saveToPublic() {
-            if (parsedPosts.length === 0) {
-                showSaveMessage('没有可发布的数据', 'error');
-                return;
-            }
-            
-            const title = document.getElementById('hotlistTitle').value || '今日频道热帖排行榜';
-            const note = document.getElementById('updateNote').value || '数据来源于频道AI分析';
-            const limit = parseInt(document.getElementById('displayCount').value) || 10;
-            
-            // 计算热度并排序
-            parsedPosts.forEach(post => {
-                post.hotScore = calculateHotScore(post);
-            });
-            
-            parsedPosts.sort((a, b) => b.hotScore - a.hotScore);
-            
-            // 限制数量并重新排名
-            const displayPosts = parsedPosts.slice(0, limit).map((post, index) => ({
-                ...post,
-                rank: index + 1
-            }));
-            
-            // 准备保存的数据
-            const publicData = {
-                posts: displayPosts,
-                meta: {
-                    title: title,
-                    note: note,
-                    totalPosts: parsedPosts.length,
-                    displayCount: displayPosts.length,
-                    updateTime: new Date().toISOString(),
-                    source: '频道AI分析'
-                }
-            };
-            
-            // 保存到本地存储
-            if (savePublicData(publicData)) {
-                // 同时保存管理员数据
-                saveAdminData({
-                    rawData: document.getElementById('aiInput').value,
-                    parsedData: parsedPosts,
-                    savedTime: new Date().toISOString()
-                });
-                
-                showSaveMessage(`成功发布 ${displayPosts.length} 条热帖数据到公共热榜`, 'success');
-                
-                // 更新公共热榜显示
-                if (currentMode === 'public') {
-                    renderPublicHotlist();
-                }
-                
-                // 禁用保存按钮，防止重复提交
-                document.getElementById('saveBtn').disabled = true;
-                
-                // 记录操作
-                addHistoryRecord('发布热榜数据', displayPosts.length);
-            }
-        }
-        
-        // ============================================
         // 【界面控制函数】
         // ============================================
         
@@ -1555,7 +2178,6 @@
             document.getElementById('publicContainer').style.display = 'block';
             document.getElementById('modeSwitchBtn').innerHTML = '<i class="fas fa-edit"></i> 编辑热榜';
             
-            // 渲染公共热榜
             renderPublicHotlist();
         }
         
@@ -1632,18 +2254,6 @@
             setTimeout(() => msgEl.remove(), 3000);
         }
         
-        function addHistoryRecord(action, count) {
-            const history = JSON.parse(localStorage.getItem('ai_parser_history') || '[]');
-            history.unshift({
-                action: action,
-                count: count,
-                time: new Date().toISOString()
-            });
-            
-            if (history.length > 50) history.pop();
-            localStorage.setItem('ai_parser_history', JSON.stringify(history));
-        }
-        
         // ============================================
         // 【测试和示例数据】
         // ============================================
@@ -1666,23 +2276,26 @@
         // 【页面初始化】
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
-            // 默认显示公共热榜页面
+            // 加载云端配置
+            loadCloudConfig();
+            
+            // 默认显示公共热榜
             showPublicView();
             
-            // 加载已有的热榜数据
-            const publicData = loadPublicData();
-            if (publicData && publicData.posts && publicData.posts.length > 0) {
-                console.log('加载到已有热榜数据:', publicData.posts.length, '条');
+            // 自动尝试从云端获取数据（如果是已配置状态）
+            if (cloudConfig.configured) {
+                setTimeout(() => {
+                    refreshData();
+                }, 1000);
             }
             
-            // 加载管理员数据（如果有）
-            const adminData = loadAdminData();
-            if (adminData && adminData.rawData) {
-                document.getElementById('aiInput').value = adminData.rawData;
-                showParseStatus('已加载上次保存的数据', 'success');
+            // 加载本地数据
+            const localData = loadPublicData();
+            if (localData && localData.posts && localData.posts.length > 0) {
+                console.log('加载到本地数据:', localData.posts.length, '条');
             }
             
-            // 绑定回车键快捷解析
+            // 绑定快捷键
             document.getElementById('aiInput').addEventListener('keydown', function(e) {
                 if (e.ctrlKey && e.key === 'Enter') {
                     parseAIResponse();
@@ -1696,10 +2309,21 @@
                 }
             });
             
-            // ESC键关闭详情页
+            // ESC键关闭弹窗
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') {
                     closePostDetail();
+                    closeLoginOverlay();
+                    closeConfigGuide();
+                    closePasswordOverlay();
+                }
+            });
+            
+            // F5键刷新数据
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+                    e.preventDefault();
+                    refreshData();
                 }
             });
         });
@@ -1708,7 +2332,6 @@
         // 【获取H5链接】
         // ============================================
         function getH5Link() {
-            // 生成当前页面的H5链接
             const h5Link = window.location.href;
             alert(`当前H5链接：\n${h5Link}\n\n将此链接分享给其他人，即可直接查看热榜。`);
             return h5Link;
