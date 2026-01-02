@@ -320,7 +320,7 @@
             height: 100%;
             background: rgba(0,0,0,0.7);
             z-index: 1000;
-            display: flex;
+            display: none;
             align-items: center;
             justify-content: center;
         }
@@ -332,6 +332,23 @@
             width: 90%;
             max-width: 400px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .login-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #f0f2f5;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
         }
         
         .login-title {
@@ -589,6 +606,20 @@
             font-size: 12px;
             opacity: 0.6;
         }
+        
+        /* 数据库状态提示 */
+        .db-status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+        
+        .db-status i {
+            margin-right: 8px;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -596,6 +627,9 @@
     <!-- 管理员登录层 -->
     <div class="login-overlay" id="loginOverlay">
         <div class="login-box">
+            <button class="login-close" onclick="closeLoginOverlay()">
+                <i class="fas fa-times"></i>
+            </button>
             <h2 class="login-title"><i class="fas fa-lock"></i> 管理员登录</h2>
             <div class="form-group">
                 <label class="form-label">账号</label>
@@ -726,7 +760,7 @@
     </div>
     
     <!-- 公共热榜页面 -->
-    <div class="container" id="publicContainer" style="display:none;">
+    <div class="container" id="publicContainer">
         <div class="public-view">
             <div class="public-header">
                 <h2 id="publicTitle">今日频道热帖排行榜</h2>
@@ -738,11 +772,17 @@
             </div>
             
             <div style="text-align:center; margin-top:40px; padding-top:20px; border-top:1px solid #eee;">
-                <button class="btn btn-primary" onclick="showAdminView()">
+                <button class="btn btn-primary" onclick="showLoginOverlay()">
                     <i class="fas fa-edit"></i> 管理员登录
                 </button>
+                <button class="btn btn-warning" onclick="clearAllData()" style="margin-left:10px;">
+                    <i class="fas fa-trash"></i> 清空所有数据
+                </button>
+                <button class="btn btn-success" onclick="showAdminView()" style="margin-left:10px;">
+                    <i class="fas fa-cog"></i> 管理界面
+                </button>
                 <p style="color:#666; margin-top:15px; font-size:13px;">
-                    数据每24小时自动更新 • 热度根据浏览、点赞、评论综合计算
+                    数据保存在本地浏览器中 • 热度根据浏览、点赞、评论综合计算
                 </p>
             </div>
         </div>
@@ -791,7 +831,10 @@
         const STORAGE_KEYS = {
             HOTLIST_DATA: 'ai_hotlist_data',
             PUBLIC_DATA: 'ai_public_data',
-            LOGIN_TOKEN: 'ai_login_token'
+            LOGIN_TOKEN: 'ai_login_token',
+            // 新增：独立的数据存储键，避免冲突
+            PUBLIC_HOTLIST_DATA: 'ai_public_hotlist_data_v2',
+            ADMIN_HOTLIST_DATA: 'ai_admin_hotlist_data_v2'
         };
         
         // 当前模式：admin（编辑） 或 public（查看）
@@ -801,8 +844,16 @@
         let parsedPosts = [];
         
         // ============================================
-        // 【登录验证】
+        // 【登录验证 - 修复版】
         // ============================================
+        
+        function showLoginOverlay() {
+            document.getElementById('loginOverlay').style.display = 'flex';
+        }
+        
+        function closeLoginOverlay() {
+            document.getElementById('loginOverlay').style.display = 'none';
+        }
         
         function checkLogin() {
             const account = document.getElementById('adminAccount').value;
@@ -818,7 +869,7 @@
                 
                 localStorage.setItem(STORAGE_KEYS.LOGIN_TOKEN, JSON.stringify(token));
                 
-                hideLoginOverlay();
+                closeLoginOverlay();
                 showAdminView();
                 showMessage('登录成功！', 'success');
             } else {
@@ -836,8 +887,6 @@
                     // 检查令牌是否过期
                     if (token.expires > Date.now()) {
                         // 自动登录成功
-                        hideLoginOverlay();
-                        showAdminView();
                         return true;
                     } else {
                         // 令牌过期，清除
@@ -849,28 +898,82 @@
                 }
             }
             
-            // 没有登录或登录失效，显示登录界面
-            showLoginOverlay();
             return false;
-        }
-        
-        function hideLoginOverlay() {
-            document.getElementById('loginOverlay').style.display = 'none';
-        }
-        
-        function showLoginOverlay() {
-            document.getElementById('loginOverlay').style.display = 'flex';
         }
         
         function logout() {
             localStorage.removeItem(STORAGE_KEYS.LOGIN_TOKEN);
-            showLoginOverlay();
             showPublicView();
             showMessage('已退出登录', 'success');
         }
         
         // ============================================
-        // 【AI回复解析引擎 - 增强版支持链接】
+        // 【数据持久化 - 修复版】
+        // ============================================
+        
+        // 保存公共热榜数据（所有人可见）
+        function savePublicData(data) {
+            try {
+                localStorage.setItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA, JSON.stringify(data));
+                console.log('数据已保存到本地存储');
+                return true;
+            } catch (e) {
+                console.error('保存数据失败:', e);
+                showMessage('保存数据失败，请检查浏览器设置', 'error');
+                return false;
+            }
+        }
+        
+        // 加载公共热榜数据
+        function loadPublicData() {
+            try {
+                const dataStr = localStorage.getItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA);
+                if (dataStr) {
+                    return JSON.parse(dataStr);
+                }
+            } catch (e) {
+                console.error('加载数据失败:', e);
+            }
+            return null;
+        }
+        
+        // 保存管理员数据
+        function saveAdminData(data) {
+            try {
+                localStorage.setItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA, JSON.stringify(data));
+                return true;
+            } catch (e) {
+                console.error('保存管理员数据失败:', e);
+                return false;
+            }
+        }
+        
+        // 加载管理员数据
+        function loadAdminData() {
+            try {
+                const dataStr = localStorage.getItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA);
+                if (dataStr) {
+                    return JSON.parse(dataStr);
+                }
+            } catch (e) {
+                console.error('加载管理员数据失败:', e);
+            }
+            return null;
+        }
+        
+        // 清空所有数据
+        function clearAllData() {
+            if (confirm('确定要清空所有热榜数据吗？此操作不可撤销！')) {
+                localStorage.removeItem(STORAGE_KEYS.PUBLIC_HOTLIST_DATA);
+                localStorage.removeItem(STORAGE_KEYS.ADMIN_HOTLIST_DATA);
+                localStorage.removeItem(STORAGE_KEYS.LOGIN_TOKEN);
+                showPublicView();
+                showMessage('所有数据已清空', 'success');
+            }
+        }
+        
+        // ============================================
+        // 【AI回复解析引擎】
         // ============================================
         
         function parseAIResponse() {
@@ -893,13 +996,13 @@
             // 策略2：解析列表格式（带数字序号和链接）
             if (!success) success = tryParseNumberedList(input);
             
-            // 策略3：解析表格格式（用|或Tab分隔）
+            // 策略3：解析表格格式
             if (!success) success = tryParseTableFormat(input);
             
             // 策略4：解析自然语言格式
             if (!success) success = tryParseNaturalLanguage(input);
             
-            // 策略5：通用解析（最后手段）
+            // 策略5：通用解析
             if (!success) success = tryParseGeneric(input);
             
             if (success) {
@@ -907,22 +1010,19 @@
                 renderPreview();
                 enableSaveButton();
             } else {
-                showParseStatus('无法解析数据，请检查格式或尝试其他提问方式', 'error');
+                showParseStatus('无法解析数据，请检查格式', 'error');
             }
         }
         
         function tryParseJSON(input) {
             try {
-                // 清理输入，处理可能的转义字符
                 let cleanedInput = input.trim();
                 
-                // 尝试找到JSON部分（可能AI回复包含说明文字）
                 const jsonMatch = cleanedInput.match(/\{[\s\S]*\}/);
                 if (jsonMatch) {
                     cleanedInput = jsonMatch[0];
                 }
                 
-                // 修复单引号为双引号（JSON标准）
                 cleanedInput = cleanedInput.replace(/'/g, '"');
                 
                 const data = JSON.parse(cleanedInput);
@@ -953,19 +1053,19 @@
             lines.forEach(line => {
                 line = line.trim();
                 
-                // 匹配格式：1. 标题 [作者] 1234浏览 567点赞 89评论 时间 链接：https://...
-                const pattern1 = /^(\d+)[\.、]\s*(.+?)\s+\[(.+?)\]\s+(\d+)\s*浏览\s+(\d+)\s*点赞\s+(\d+)\s*评论\s+(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/;
+                // 多种格式匹配
+                const patterns = [
+                    /^(\d+)[\.、]\s*(.+?)\s+\[(.+?)\]\s+(\d+)\s*浏览\s+(\d+)\s*点赞\s+(\d+)\s*评论\s+(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/,
+                    /^(\d+)[\.、]\s*(.+?)\s+[-–]\s+(.+?)\s+[-–]\s+(\d+)\s*浏览\s+[-–]\s+(\d+)\s*点赞\s+[-–]\s+(\d+)\s*评论\s+[-–]\s+(.+?)(?:\s+[-–]\s+链接[:：]\s*(https?:\/\/\S+))?$/,
+                    /^(\d+)\s+(.+?)\s*\((.+?)\)\s+(\d+)\s*浏览\s+(\d+)\s*点赞\s+(\d+)\s*评论\s+(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/,
+                    /^(\d+)[\.、]\s*(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/
+                ];
                 
-                // 匹配格式：1. 标题 - 作者 - 1234浏览 - 567点赞 - 89评论 - 时间 - 链接：https://...
-                const pattern2 = /^(\d+)[\.、]\s*(.+?)\s+[-–]\s+(.+?)\s+[-–]\s+(\d+)\s*浏览\s+[-–]\s+(\d+)\s*点赞\s+[-–]\s+(\d+)\s*评论\s+[-–]\s+(.+?)(?:\s+[-–]\s+链接[:：]\s*(https?:\/\/\S+))?$/;
-                
-                // 匹配格式：排名 标题（作者）1234浏览 567点赞 时间 链接：...
-                const pattern3 = /^(\d+)\s+(.+?)\s*\((.+?)\)\s+(\d+)\s*浏览\s+(\d+)\s*点赞\s+(\d+)\s*评论\s+(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/;
-                
-                // 匹配通用格式：1. 标题 - 其他信息包含链接
-                const pattern4 = /^(\d+)[\.、]\s*(.+?)(?:\s+链接[:：]\s*(https?:\/\/\S+))?$/;
-                
-                let match = line.match(pattern1) || line.match(pattern2) || line.match(pattern3) || line.match(pattern4);
+                let match = null;
+                for (const pattern of patterns) {
+                    match = line.match(pattern);
+                    if (match) break;
+                }
                 
                 if (match) {
                     const post = {
@@ -979,11 +1079,11 @@
                         link: ''
                     };
                     
-                    // 尝试提取作者
+                    // 提取作者
                     const authorMatch = line.match(/\[(.+?)\]/) || line.match(/\((.+?)\)/);
                     if (authorMatch) post.author = authorMatch[1].trim();
                     
-                    // 提取数字数据
+                    // 提取数据
                     const viewMatch = line.match(/(\d+)\s*浏览/);
                     const likeMatch = line.match(/(\d+)\s*点赞/);
                     const commentMatch = line.match(/(\d+)\s*评论/);
@@ -1000,7 +1100,6 @@
                     else if (match[7]) link = match[7];
                     else if (match[3]) link = match[3];
                     
-                    // 如果没有通过正则提取到链接，尝试从行中提取URL
                     if (!link) {
                         const urlMatch = line.match(/https?:\/\/\S+/);
                         if (urlMatch) link = urlMatch[0];
@@ -1012,7 +1111,7 @@
                 }
             });
             
-            if (posts.length >= 2) { // 至少解析出2条才认为成功
+            if (posts.length >= 1) {
                 parsedPosts = posts;
                 return true;
             }
@@ -1023,7 +1122,7 @@
         function tryParseTableFormat(input) {
             const lines = input.split('\n').filter(line => line.trim() && (line.includes('|') || line.includes('\t')));
             
-            if (lines.length < 2) return false;
+            if (lines.length < 1) return false;
             
             const posts = [];
             
@@ -1033,19 +1132,14 @@
                     line.split('\t').map(p => p.trim());
                 
                 if (parts.length >= 3) {
-                    // 尝试识别各个字段
                     const title = parts[0] || parts[1] || '无标题';
                     const author = parts.find(p => p.includes('[') && p.includes(']')) || 
                                    parts.find(p => p.includes('(') && p.includes(')')) || 
                                    parts[1] || '未知作者';
                     
-                    // 提取数字（浏览量、点赞数、评论数）
                     const numbers = parts.filter(p => /^\d+$/.test(p)).map(Number);
-                    
-                    // 提取时间（包含"前"、"小时"、"分钟"等词）
                     const timePart = parts.find(p => /前$|小时|分钟|天/.test(p)) || '最近';
                     
-                    // 提取链接
                     let link = '';
                     const linkPart = parts.find(p => p.startsWith('http'));
                     if (linkPart) link = linkPart;
@@ -1063,7 +1157,7 @@
                 }
             });
             
-            if (posts.length >= 2) {
+            if (posts.length >= 1) {
                 parsedPosts = posts;
                 return true;
             }
@@ -1072,7 +1166,6 @@
         }
         
         function tryParseNaturalLanguage(input) {
-            // 用于解析自然语言描述的AI回复
             const lines = input.split('\n').filter(line => line.trim());
             const posts = [];
             let currentRank = 1;
@@ -1080,30 +1173,25 @@
             lines.forEach(line => {
                 line = line.trim();
                 
-                // 跳过明显的非帖子行
                 if (line.includes('以下是') || line.includes('热帖') || line.includes('排行榜') || 
                     line.includes('---') || line.includes('===') || line.length < 10) {
                     return;
                 }
                 
-                // 提取标题（通常是最长的连续文本段）
                 const titleMatch = line.match(/[^：:]+[:：]\s*(.+?)(?=\s+[\[\(]|$)/) || 
                                   line.match(/(.+?)(?=\s+[\[\(]|$)/);
                 
                 if (titleMatch) {
                     const title = titleMatch[1].trim();
                     
-                    // 提取作者
                     const authorMatch = line.match(/[\[\(](.+?)[\]\)]/);
                     const author = authorMatch ? authorMatch[1].trim() : '未知作者';
                     
-                    // 提取数字
                     const viewMatch = line.match(/(\d+)\s*浏览/);
                     const likeMatch = line.match(/(\d+)\s*点赞/);
                     const commentMatch = line.match(/(\d+)\s*评论/);
                     const timeMatch = line.match(/(\d+\s*(?:分钟|小时|天)前|今天|最近)/);
                     
-                    // 提取链接
                     let link = '';
                     const linkMatch = line.match(/https?:\/\/\S+/);
                     if (linkMatch) link = linkMatch[0];
@@ -1121,7 +1209,7 @@
                 }
             });
             
-            if (posts.length >= 2) {
+            if (posts.length >= 1) {
                 parsedPosts = posts;
                 return true;
             }
@@ -1130,38 +1218,31 @@
         }
         
         function tryParseGeneric(input) {
-            // 通用解析：按行处理，智能提取
             const lines = input.split('\n').filter(line => line.trim());
             const posts = [];
             
             lines.forEach((line, index) => {
                 line = line.trim();
                 
-                // 跳过明显的非帖子行
                 if (line.includes('以下是') || line.includes('热帖') || line.includes('排行榜') || 
                     line.includes('---') || line.includes('===') || line.length < 5) {
                     return;
                 }
                 
-                // 提取可能的标题（最长连续中文/英文文本）
                 const titleMatch = line.match(/[^0-9\s\.、](.{5,50}?)(?=\s*[\[\(]|\s+\d|$)/);
                 if (titleMatch) {
                     const title = titleMatch[0].trim();
                     
-                    // 提取作者
                     let author = '未知作者';
                     const authorMatch = line.match(/[\[\(]([^\]\)]+)[\]\)]/);
                     if (authorMatch) author = authorMatch[1].trim();
                     
-                    // 提取所有数字
                     const numbers = line.match(/\d+/g);
                     
-                    // 提取时间
                     let time = '最近';
                     const timeMatch = line.match(/(\d+\s*(?:分钟|小时|天)前|今天|最近)/);
                     if (timeMatch) time = timeMatch[0];
                     
-                    // 提取链接
                     let link = '';
                     const linkMatch = line.match(/https?:\/\/\S+/);
                     if (linkMatch) link = linkMatch[0];
@@ -1179,8 +1260,8 @@
                 }
             });
             
-            if (posts.length >= 2) {
-                parsedPosts = posts.slice(0, 20); // 最多20条
+            if (posts.length >= 1) {
+                parsedPosts = posts.slice(0, 20);
                 return true;
             }
             
@@ -1190,30 +1271,25 @@
         function extractAndValidateLink(link) {
             if (!link) return '';
             
-            // 清理链接
             link = link.trim();
-            
-            // 移除末尾的标点符号
             link = link.replace(/[.,;:!?]$/, '');
             
-            // 验证链接格式
             const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([\/\w .-]*)*\/?$/;
             
             if (urlPattern.test(link)) {
-                // 确保有http或https前缀
                 if (!link.startsWith('http')) {
                     link = 'https://' + link;
                 }
                 return link;
             }
             
-            return ''; // 无效链接返回空字符串
+            return '';
         }
         
         function cleanText(text) {
             return text
-                .replace(/^[\.、\d\s]+/, '') // 去掉开头的序号
-                .replace(/[\*\-_\s]+$/, '')  // 去掉结尾的符号
+                .replace(/^[\.、\d\s]+/, '')
+                .replace(/[\*\-_\s]+$/, '')
                 .trim();
         }
         
@@ -1228,17 +1304,14 @@
             const statsEl = document.getElementById('detailPostStats');
             const linkEl = document.getElementById('detailPostLink');
             
-            // 设置帖子标题
             titleEl.textContent = post.title;
             
-            // 设置元数据
             metaEl.innerHTML = `
                 <div><i class="fas fa-user"></i> ${post.author}</div>
                 <div><i class="far fa-clock"></i> ${post.time}</div>
                 <div><i class="fas fa-fire"></i> 热度: ${calculateHotScore(post).toFixed(1)}</div>
             `;
             
-            // 设置统计数据
             statsEl.innerHTML = `
                 <div class="stat-item">
                     <div class="stat-value">${formatNumber(post.views)}</div>
@@ -1254,25 +1327,24 @@
                 </div>
             `;
             
-            // 设置链接
             if (post.link && post.link.trim() !== '') {
                 linkEl.href = post.link;
                 linkEl.classList.remove('link-unavailable');
+                linkEl.style.display = 'inline-block';
             } else {
                 linkEl.href = '#';
                 linkEl.classList.add('link-unavailable');
-                linkEl.style.display = 'none'; // 隐藏无效链接
+                linkEl.style.display = 'none';
             }
             
-            // 显示详情页
             overlay.style.display = 'flex';
-            document.body.style.overflow = 'hidden'; // 防止背景滚动
+            document.body.style.overflow = 'hidden';
         }
         
         function closePostDetail() {
             const overlay = document.getElementById('postDetailOverlay');
             overlay.style.display = 'none';
-            document.body.style.overflow = 'auto'; // 恢复滚动
+            document.body.style.overflow = 'auto';
         }
         
         // ============================================
@@ -1299,7 +1371,6 @@
             parsedPosts.forEach((post, index) => {
                 const hotScore = calculateHotScore(post);
                 
-                // 生成链接HTML（仅在链接有效时显示）
                 let linkHtml = '';
                 if (post.link && post.link.trim() !== '') {
                     linkHtml = `<a href="${post.link}" target="_blank" class="post-link" onclick="event.stopPropagation()">
@@ -1332,7 +1403,7 @@
         }
         
         function renderPublicHotlist() {
-            const publicData = JSON.parse(localStorage.getItem(STORAGE_KEYS.PUBLIC_DATA) || '{}');
+            const publicData = loadPublicData() || {};
             const posts = publicData.posts || [];
             const meta = publicData.meta || {};
             
@@ -1343,7 +1414,7 @@
                     <div style="text-align:center; padding:80px 20px; color:#666;">
                         <i class="fas fa-inbox fa-3x"></i>
                         <h3 style="margin:20px 0 10px;">暂无热榜数据</h3>
-                        <p>管理员正在准备今日热榜...</p>
+                        <p>点击"管理员登录"按钮创建第一个热榜</p>
                     </div>
                 `;
                 return;
@@ -1358,7 +1429,6 @@
                 
                 const hotScore = calculateHotScore(post);
                 
-                // 生成链接HTML（仅在链接有效时显示）
                 let linkHtml = '';
                 if (post.link && post.link.trim() !== '') {
                     linkHtml = `<a href="${post.link}" target="_blank" class="item-link" onclick="event.stopPropagation()">
@@ -1391,7 +1461,6 @@
             
             container.innerHTML = html;
             
-            // 更新标题和时间
             if (meta.title) {
                 document.getElementById('publicTitle').textContent = meta.title;
             }
@@ -1442,27 +1511,27 @@
             };
             
             // 保存到本地存储
-            localStorage.setItem(STORAGE_KEYS.PUBLIC_DATA, JSON.stringify(publicData));
-            
-            // 也保存原始数据（供管理员使用）
-            localStorage.setItem(STORAGE_KEYS.HOTLIST_DATA, JSON.stringify({
-                rawData: document.getElementById('aiInput').value,
-                parsedData: parsedPosts,
-                savedTime: new Date().toISOString()
-            }));
-            
-            showSaveMessage(`成功发布 ${displayPosts.length} 条热帖数据到公共热榜`, 'success');
-            
-            // 更新公共热榜显示
-            if (currentMode === 'public') {
-                renderPublicHotlist();
+            if (savePublicData(publicData)) {
+                // 同时保存管理员数据
+                saveAdminData({
+                    rawData: document.getElementById('aiInput').value,
+                    parsedData: parsedPosts,
+                    savedTime: new Date().toISOString()
+                });
+                
+                showSaveMessage(`成功发布 ${displayPosts.length} 条热帖数据到公共热榜`, 'success');
+                
+                // 更新公共热榜显示
+                if (currentMode === 'public') {
+                    renderPublicHotlist();
+                }
+                
+                // 禁用保存按钮，防止重复提交
+                document.getElementById('saveBtn').disabled = true;
+                
+                // 记录操作
+                addHistoryRecord('发布热榜数据', displayPosts.length);
             }
-            
-            // 禁用保存按钮，防止重复提交
-            document.getElementById('saveBtn').disabled = true;
-            
-            // 记录操作
-            addHistoryRecord('发布热榜数据', displayPosts.length);
         }
         
         // ============================================
@@ -1470,10 +1539,14 @@
         // ============================================
         
         function showAdminView() {
-            currentMode = 'admin';
-            document.getElementById('adminContainer').style.display = 'block';
-            document.getElementById('publicContainer').style.display = 'none';
-            document.getElementById('modeSwitchBtn').innerHTML = '<i class="fas fa-eye"></i> 查看热榜';
+            if (checkAutoLogin()) {
+                currentMode = 'admin';
+                document.getElementById('adminContainer').style.display = 'block';
+                document.getElementById('publicContainer').style.display = 'none';
+                document.getElementById('modeSwitchBtn').innerHTML = '<i class="fas fa-eye"></i> 查看热榜';
+            } else {
+                showLoginOverlay();
+            }
         }
         
         function showPublicView() {
@@ -1490,10 +1563,7 @@
             if (currentMode === 'admin') {
                 showPublicView();
             } else {
-                // 尝试显示管理员界面，如果需要登录会弹出登录框
-                if (checkAutoLogin()) {
-                    showAdminView();
-                }
+                showAdminView();
             }
         }
         
@@ -1546,7 +1616,6 @@
         }
         
         function showMessage(message, type) {
-            // 临时消息提示
             const msgEl = document.createElement('div');
             msgEl.innerHTML = `
                 <div style="position:fixed; top:20px; right:20px; padding:15px 20px; 
@@ -1586,12 +1655,7 @@
 2. 前端框架对比：Vue vs React深度分析 [前端达人] 1890浏览 210点赞 32评论 3小时前 链接：https://example.com/vue-vs-react
 3. 移动端适配最佳实践总结 [UI设计师] 1450浏览 180点赞 28评论 4小时前 链接：https://example.com/mobile-adaptation
 4. 小程序开发经验分享 [开发小能手] 1320浏览 165点赞 25评论 5小时前 链接：https://example.com/mini-program
-5. 数据库优化技巧 [后端架构师] 1250浏览 155点赞 22评论 6小时前 链接：https://example.com/database-optimization
-6. 产品设计思维分享 [产品经理] 1180浏览 142点赞 20评论 7小时前 链接：https://example.com/product-design
-7. 职场经验交流 [资深职场人] 1120浏览 135点赞 19评论 8小时前 链接：https://example.com/career-experience
-8. 学习资源推荐 [学习委员] 1080浏览 128点赞 18评论 9小时前
-9. 行业趋势分析 [行业观察员] 1050浏览 122点赞 17评论 10小时前 链接：无效链接
-10. 日常技术问答 [热心网友] 980浏览 115点赞 16评论 11小时前 链接：https://example.com/tech-qa`;
+5. 数据库优化技巧 [后端架构师] 1250浏览 155点赞 22评论 6小时前 链接：https://example.com/database-optimization`;
 
             document.getElementById('aiInput').value = sampleData;
             parseAIResponse();
@@ -1602,25 +1666,20 @@
         // 【页面初始化】
         // ============================================
         document.addEventListener('DOMContentLoaded', function() {
-            // 检查是否已登录
-            if (checkAutoLogin()) {
-                showAdminView();
-            } else {
-                showPublicView();
+            // 默认显示公共热榜页面
+            showPublicView();
+            
+            // 加载已有的热榜数据
+            const publicData = loadPublicData();
+            if (publicData && publicData.posts && publicData.posts.length > 0) {
+                console.log('加载到已有热榜数据:', publicData.posts.length, '条');
             }
             
-            // 加载上一次的数据（如果有）
-            const savedData = localStorage.getItem(STORAGE_KEYS.HOTLIST_DATA);
-            if (savedData) {
-                try {
-                    const data = JSON.parse(savedData);
-                    if (data.rawData) {
-                        document.getElementById('aiInput').value = data.rawData;
-                        showParseStatus('已加载上次保存的数据', 'success');
-                    }
-                } catch (e) {
-                    // 忽略错误
-                }
+            // 加载管理员数据（如果有）
+            const adminData = loadAdminData();
+            if (adminData && adminData.rawData) {
+                document.getElementById('aiInput').value = adminData.rawData;
+                showParseStatus('已加载上次保存的数据', 'success');
             }
             
             // 绑定回车键快捷解析
